@@ -1,5 +1,5 @@
 class LittleGame extends egret.DisplayObjectContainer {
-	public GRAVITY:number = 3;
+	public GRAVITY:number = 1;
 
 
     private game_width :number = egret.MainContext.instance.stage.stageWidth;
@@ -17,8 +17,12 @@ class LittleGame extends egret.DisplayObjectContainer {
    	private isDown:Boolean;
    	private isRun:Boolean;
 
+   	private o_x:number;
+   	private o_y:number;
+   	private raid:number;
    	private vx:number;
    	private vy:number;
+   	private goal:number;
     /**构造函数*/
     public constructor() {
         super();
@@ -61,11 +65,10 @@ class LittleGame extends egret.DisplayObjectContainer {
 		this.testText2.text = "我是地球人";
 		this.testText2.y = 20;
 		this.addChild(this.testText2);
-    }
 
-    private initEvent():void{
-        this.touchEnabled=true;
-        this.addEventListener(egret.TouchEvent.TOUCH_BEGIN,this.touchDownHandler,this);
+		this.aimList = new Array();
+
+		this.touchEnabled=true;
     }
 
     private touchDownHandler(evt:egret.TouchEvent):void{
@@ -99,12 +102,14 @@ class LittleGame extends egret.DisplayObjectContainer {
 	private touchUpHandler(evt:egret.TouchEvent):void{
 		this.isRun = true;
 		this.removeTouchHandler();
-		this.vx = this.game_width / 30;
-		this.vy = -this.game_height / 30;
+		this.vx = this.game_width / 30 * Math.cos(this.raid) * this.arrow.alpha;
+		this.vy = this.game_height / 30 * Math.sin(this.raid) * this.arrow.alpha;
+		this.testText2.text = "raid:" + this.fixNum(this.raid) + ",vx:" + this.fixNum(this.vx) + ",vy:" + this.fixNum(this.vy);
+
 		this.start();
 	}
 
-	private removeTouchHandler():void{
+	public removeTouchHandler():void{
 		console.log("zzz");
 		this.removeEventListener(egret.TouchEvent.TOUCH_BEGIN,this.touchDownHandler,this);
 		console.log("zzz");
@@ -115,14 +120,47 @@ class LittleGame extends egret.DisplayObjectContainer {
 		this.removeEventListener(egret.TouchEvent.TOUCH_RELEASE_OUTSIDE,this.touchUpHandler,this);
 	}
 
+	private updateRaid():void{
+		this.raid = Math.atan((this.arrow.y - this.o_y)/(this.arrow.x - this.o_x));
+
+ 
+
+	}
+
 	private setArrowPos(x:number,y:number):void{
-		var r:number = Math.atan(this.arrow.y - y)/(this.arrow.x - x)/Math.PI*360;
-		this.arrow.rotation = r;
+		this.o_x = x;
+		this.o_y = y; 
+		this.updateRaid();
+		if(this.raid > 0 || this.o_x > this.arrow.x){
+			if(this.o_y > this.arrow.y)
+			this.raid = -Math.PI/2;
+			else 
+			this.raid = 0;
+		}
+		var r:number = this.raid/Math.PI*180;
+		this.arrow.rotation = (r+360)%360;
 		this.circleSP.visible = true;
 		var alpha:number = egret.Point.distance(new egret.Point(this.arrow.x,this.arrow.y),new egret.Point(x,y))/(this.game_width*0.2);
 		this.circleSP.alpha = alpha;
-		this.testText1.text = "角度:" + r + ",alpha:" + alpha;
+
+		this.testText2.text = "x:" + x + ",y:" + y + ",ax:" + this.arrow.x + ",ay:" + this.arrow.y;
+		this.testText1.text = "角度:" + this.fixNum(r) + ",alpha:" + this.fixNum(alpha);
 	}
+
+	private fixNum(num:number):string{
+		var f = Math.round(num*100)/100;    
+        var s = f.toString();    
+        var rs = s.indexOf('.');    
+        if (rs < 0) {    
+            rs = s.length;    
+            s += '.';    
+        }    
+        while (s.length <= rs + 2) {    
+            s += '0';    
+        }    
+        return s;
+	}
+
 	private reset():void{
 		console.log("rrrr");
 		this.isDown = false;
@@ -134,24 +172,39 @@ class LittleGame extends egret.DisplayObjectContainer {
 		console.log("rrrr2");
 		this.addEventListener(egret.TouchEvent.TOUCH_BEGIN,this.touchDownHandler,this);
 
+		this.arrow.rotation = 0;
 		this.circleSP.x = this.arrow.x = this.game_width*0.2;
     	this.circleSP.y = this.arrow.y = this.game_height*0.6;
 
     	this.circleSP.visible = false;
 
-    	this.testText1.text = "2222";
-		this.testText2.text = "2222";
+		this.createObj();
+
+		this.goal = 0;
+		this.checkHit();
+    	this.testText1.text = "goal：0";
+		this.testText2.text = "press the screen to aim.";
 	}
 
+	private createObj():void{
+		while(this.aimList.length>0){
+			this.bg.removeChild(this.aimList.shift());
+		}
+		for(var i:number = 0;i<10;i++){
+			var op:egret.Sprite = new egret.Sprite();
+	        op.graphics.beginFill(0x0,1);
+        	op.graphics.drawCircle(0,0,10);
+        	op.graphics.endFill();
+        	op.x = Math.random() * this.game_width* 0.65 + this.game_width*0.3;
+        	op.y = Math.random() * this.game_height* 0.45 + this.game_height*0.1;
+        	this.bg.addChild(op);
+        	this.aimList.push(op);
+		}
+	}
     /**游戏启动后，会自动执行此方法*/
     public startGame():void {
     	this.init();
-     	this.initEvent();
-
-		this.circleSP.x = this.arrow.x = this.game_width*0.2;
-		this.circleSP.y = this.arrow.y = this.game_height*0.6;
-
-    	this.circleSP.visible = false;
+     	this.reset();
     }
 
     public start():void {
@@ -161,12 +214,19 @@ class LittleGame extends egret.DisplayObjectContainer {
 
     private enterFrameHandler(evt:egret.Event):void{
     	if(this.isRun){
+			this.o_x = this.arrow.x;
+			this.o_y = this.arrow.y;
+
     		this.arrow.x += this.vx;
     		this.arrow.y += this.vy;
     		this.vy += this.GRAVITY;
 
-			this.testText2.text = "vx:" + this.vx + ",vy:" + this.vy;
 
+    		this.updateRaid();
+    		var r:number = this.raid/Math.PI*180;
+			this.arrow.rotation = (r+360)%360;
+			//this.testText2.text = "vx:" + this.vx + ",vy:" + this.vy;
+			this.checkHit();
     		if(this.arrow.x > this.game_width || this.arrow.y > this.game_height * 0.6){
     			this.end();
     			this.removeEventListener(egret.Event.ENTER_FRAME,this.enterFrameHandler,this);
@@ -174,8 +234,21 @@ class LittleGame extends egret.DisplayObjectContainer {
     	}
     }
 
+    private getDistance(o1:any,o2:any):number{
+    	return Math.sqrt((o1.x - o2.x)*(o1.x - o2.x) + (o1.y - o2.y)*(o1.y - o2.y))
+    }
+    private checkHit():void{
+    	for(var i:number = this.aimList.length-1;i>=0;i--){
+    		if(this.aimList[i].alpha != 1)continue;
+    		if(this.getDistance(this.arrow,this.aimList[i]) < 10){
+    			this.aimList[i].alpha = 0.5;
+    			this.goal++;
+    		}
+    	}
+    	this.testText1.text = "goal：" + this.goal;
+    }
     private end():void{
     	console.log("ssss");
-    	setTimeout(this.reset,this,2000);
+    	egret.setTimeout(this.reset,this,2000);
     }
 }

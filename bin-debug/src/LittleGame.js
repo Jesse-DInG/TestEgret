@@ -9,7 +9,7 @@ var LittleGame = (function (_super) {
     /**构造函数*/
     function LittleGame() {
         _super.call(this);
-        this.GRAVITY = 3;
+        this.GRAVITY = 1;
         this.game_width = egret.MainContext.instance.stage.stageWidth;
         this.game_height = egret.MainContext.instance.stage.stageHeight;
         this.addEventListener(egret.Event.ADDED_TO_STAGE, this.startGame, this);
@@ -47,10 +47,8 @@ var LittleGame = (function (_super) {
         this.testText2.text = "我是地球人";
         this.testText2.y = 20;
         this.addChild(this.testText2);
-    };
-    LittleGame.prototype.initEvent = function () {
+        this.aimList = new Array();
         this.touchEnabled = true;
-        this.addEventListener(egret.TouchEvent.TOUCH_BEGIN, this.touchDownHandler, this);
     };
     LittleGame.prototype.touchDownHandler = function (evt) {
         if (this.isRun) {
@@ -79,8 +77,9 @@ var LittleGame = (function (_super) {
     LittleGame.prototype.touchUpHandler = function (evt) {
         this.isRun = true;
         this.removeTouchHandler();
-        this.vx = this.game_width / 30;
-        this.vy = -this.game_height / 30;
+        this.vx = this.game_width / 30 * Math.cos(this.raid) * this.arrow.alpha;
+        this.vy = this.game_height / 30 * Math.sin(this.raid) * this.arrow.alpha;
+        this.testText2.text = "raid:" + this.fixNum(this.raid) + ",vx:" + this.fixNum(this.vx) + ",vy:" + this.fixNum(this.vy);
         this.start();
     };
     LittleGame.prototype.removeTouchHandler = function () {
@@ -93,13 +92,39 @@ var LittleGame = (function (_super) {
         console.log("zzz");
         this.removeEventListener(egret.TouchEvent.TOUCH_RELEASE_OUTSIDE, this.touchUpHandler, this);
     };
+    LittleGame.prototype.updateRaid = function () {
+        this.raid = Math.atan((this.arrow.y - this.o_y) / (this.arrow.x - this.o_x));
+    };
     LittleGame.prototype.setArrowPos = function (x, y) {
-        var r = Math.atan(this.arrow.y - y) / (this.arrow.x - x) / Math.PI * 360;
-        this.arrow.rotation = r;
+        this.o_x = x;
+        this.o_y = y;
+        this.updateRaid();
+        if (this.raid > 0 || this.o_x > this.arrow.x) {
+            if (this.o_y > this.arrow.y)
+                this.raid = -Math.PI / 2;
+            else
+                this.raid = 0;
+        }
+        var r = this.raid / Math.PI * 180;
+        this.arrow.rotation = (r + 360) % 360;
         this.circleSP.visible = true;
         var alpha = egret.Point.distance(new egret.Point(this.arrow.x, this.arrow.y), new egret.Point(x, y)) / (this.game_width * 0.2);
         this.circleSP.alpha = alpha;
-        this.testText1.text = "角度:" + r + ",alpha:" + alpha;
+        this.testText2.text = "x:" + x + ",y:" + y + ",ax:" + this.arrow.x + ",ay:" + this.arrow.y;
+        this.testText1.text = "角度:" + this.fixNum(r) + ",alpha:" + this.fixNum(alpha);
+    };
+    LittleGame.prototype.fixNum = function (num) {
+        var f = Math.round(num * 100) / 100;
+        var s = f.toString();
+        var rs = s.indexOf('.');
+        if (rs < 0) {
+            rs = s.length;
+            s += '.';
+        }
+        while (s.length <= rs + 2) {
+            s += '0';
+        }
+        return s;
     };
     LittleGame.prototype.reset = function () {
         console.log("rrrr");
@@ -111,19 +136,35 @@ var LittleGame = (function (_super) {
         this.removeEventListener(egret.Event.ENTER_FRAME, this.enterFrameHandler, this);
         console.log("rrrr2");
         this.addEventListener(egret.TouchEvent.TOUCH_BEGIN, this.touchDownHandler, this);
+        this.arrow.rotation = 0;
         this.circleSP.x = this.arrow.x = this.game_width * 0.2;
         this.circleSP.y = this.arrow.y = this.game_height * 0.6;
         this.circleSP.visible = false;
-        this.testText1.text = "2222";
-        this.testText2.text = "2222";
+        this.createObj();
+        this.goal = 0;
+        this.checkHit();
+        this.testText1.text = "goal：0";
+        this.testText2.text = "press the screen to aim.";
+    };
+    LittleGame.prototype.createObj = function () {
+        while (this.aimList.length > 0) {
+            this.bg.removeChild(this.aimList.shift());
+        }
+        for (var i = 0; i < 10; i++) {
+            var op = new egret.Sprite();
+            op.graphics.beginFill(0x0, 1);
+            op.graphics.drawCircle(0, 0, 10);
+            op.graphics.endFill();
+            op.x = Math.random() * this.game_width * 0.65 + this.game_width * 0.3;
+            op.y = Math.random() * this.game_height * 0.45 + this.game_height * 0.1;
+            this.bg.addChild(op);
+            this.aimList.push(op);
+        }
     };
     /**游戏启动后，会自动执行此方法*/
     LittleGame.prototype.startGame = function () {
         this.init();
-        this.initEvent();
-        this.circleSP.x = this.arrow.x = this.game_width * 0.2;
-        this.circleSP.y = this.arrow.y = this.game_height * 0.6;
-        this.circleSP.visible = false;
+        this.reset();
     };
     LittleGame.prototype.start = function () {
         this.removeEventListener(egret.Event.ENTER_FRAME, this.enterFrameHandler, this);
@@ -131,19 +172,39 @@ var LittleGame = (function (_super) {
     };
     LittleGame.prototype.enterFrameHandler = function (evt) {
         if (this.isRun) {
+            this.o_x = this.arrow.x;
+            this.o_y = this.arrow.y;
             this.arrow.x += this.vx;
             this.arrow.y += this.vy;
             this.vy += this.GRAVITY;
-            this.testText2.text = "vx:" + this.vx + ",vy:" + this.vy;
+            this.updateRaid();
+            var r = this.raid / Math.PI * 180;
+            this.arrow.rotation = (r + 360) % 360;
+            //this.testText2.text = "vx:" + this.vx + ",vy:" + this.vy;
+            this.checkHit();
             if (this.arrow.x > this.game_width || this.arrow.y > this.game_height * 0.6) {
                 this.end();
                 this.removeEventListener(egret.Event.ENTER_FRAME, this.enterFrameHandler, this);
             }
         }
     };
+    LittleGame.prototype.getDistance = function (o1, o2) {
+        return Math.sqrt((o1.x - o2.x) * (o1.x - o2.x) + (o1.y - o2.y) * (o1.y - o2.y));
+    };
+    LittleGame.prototype.checkHit = function () {
+        for (var i = this.aimList.length - 1; i >= 0; i--) {
+            if (this.aimList[i].alpha != 1)
+                continue;
+            if (this.getDistance(this.arrow, this.aimList[i]) < 10) {
+                this.aimList[i].alpha = 0.5;
+                this.goal++;
+            }
+        }
+        this.testText1.text = "goal：" + this.goal;
+    };
     LittleGame.prototype.end = function () {
         console.log("ssss");
-        setTimeout(this.reset, this, 2000);
+        egret.setTimeout(this.reset, this, 2000);
     };
     return LittleGame;
 })(egret.DisplayObjectContainer);
